@@ -1,5 +1,3 @@
-// src/auth.js
-
 const ACCESS_KEY = 'gw_access_token'
 const REFRESH_KEY = 'gw_refresh_token'
 const USER_KEY = 'gw_user'
