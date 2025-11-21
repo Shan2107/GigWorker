@@ -1,11 +1,18 @@
-
 import base64
 import json
 import os
+import fitz 
 from openai import OpenAI
 from config import OpenAIConfig
-from prompts import CHATBOT_SYSTEM_PROMPT, VISION_SYSTEM_PROMPT
+from prompts import (
+    CHATBOT_SYSTEM_PROMPT, 
 
+    CONTRACT_ANALYZER_PROMPT, 
+
+    EXPENSE_VISION_PROMPT, 
+
+    INCOME_VISION_PROMPT
+)
 from io import BytesIO
 
 class GigWorkerAIService:
@@ -13,6 +20,48 @@ class GigWorkerAIService:
         self.client = OpenAI(api_key=OpenAIConfig.API_KEY)
         self.config = OpenAIConfig
     
+
+    def _extract_text_from_pdf(self, file_path):
+        """Extract text from a PDF file."""
+        try:
+            doc = fitz.open(file_path)
+            text = ""
+            for page in doc:
+                text += page.get_text()
+            return text
+        except Exception as e:
+            return f"Error extracting text from PDF: {e}"
+
+
+
+    def analyze_contract(self, file_path):
+        """
+        Analyzes a contract from a text or PDF file.
+        """
+        content = ""
+        if file_path.lower().endswith('.pdf'):
+            content = self._extract_text_from_pdf(file_path)
+        elif file_path.lower().endswith('.txt'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+        else:
+            return "Unsupported file type. Please provide a .txt or .pdf file."
+
+        if "Error" in content:
+            return content
+
+        response = self.client.chat.completions.create(
+            model=self.config.CHAT_MODEL,
+            messages=[
+                {"role": "system", "content": CONTRACT_ANALYZER_PROMPT},
+                {"role": "user", "content": f"Please analyze the following contract:\n\n{content}"}
+            ],
+            temperature=self.config.TEMPERATURE,
+            max_tokens=2000  # Increased tokens for detailed contract analysis
+        )
+
+        return response.choices[0].message.content
+
     def encode_image(self, image_path):
         """Encode image to base64 for vision API"""
         with open(image_path, "rb") as image_file:
@@ -31,53 +80,65 @@ class GigWorkerAIService:
             temperature=self.config.TEMPERATURE,
             max_tokens=self.config.MAX_TOKENS
         )
-        
         return response.choices[0].message.content
 
-    def extract_financial_data(self, file_path, user_context=None):
+
+
+    def _extract_data_from_image(self, file_path, prompt):
         """
-        Extract financial data from images or PDFs using vision capabilities.
+        Private helper to extract data from an image using a specific prompt.
         """
-        base64_images = []
-        base64_images.append(self.encode_image(file_path))
+        try:
+            base64_image = self.encode_image(file_path)
+        except FileNotFoundError:
+            return {"error": "File not found", "file_path": file_path}
+        except Exception as e:
+            return {"error": f"Failed to encode image: {e}"}
 
         messages = [
             {
                 "role": "user",
                 "content": [
+                    {"type": "text", "text": prompt},
                     {
-                        "type": "text",
-                        "text": f"{VISION_SYSTEM_PROMPT}\n\nUser Context: {user_context or 'General business expense'}\n\nReturn ONLY valid JSON format as specified."
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
                     }
                 ]
             }
         ]
 
-        for base64_image in base64_images:
-            messages[0]["content"].append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_image}"
-                }
-            })
-
         response = self.client.chat.completions.create(
             model=self.config.VISION_MODEL,
             messages=messages,
+            response_format={"type": "json_object"},
             temperature=0.1,
             max_tokens=1500
         )
 
         try:
-            # The response content is a string, which might be a JSON object.
             content = response.choices[0].message.content
-            # It's common for the model to wrap the JSON in markdown
-            if content.startswith("```json"):
-                content = content[7:-4]
             extracted_data = json.loads(content)
             return extracted_data
         except (json.JSONDecodeError, KeyError) as e:
             return {"error": "Failed to parse extraction results", "raw_output": response.choices[0].message.content, "parsing_error": str(e)}
+
+
+
+    def extract_expense_data(self, file_path):
+        """
+        Extracts expense data from an image file using the vision model.
+        """
+        return self._extract_data_from_image(file_path, EXPENSE_VISION_PROMPT)
+
+
+    def extract_income_data(self, file_path):
+        """
+        Extracts income data from an image file using the vision model.
+        """
+        return self._extract_data_from_image(file_path, INCOME_VISION_PROMPT)
+
+
 
     def categorize_expense(self, description, amount, context=None):
         """
@@ -85,11 +146,12 @@ class GigWorkerAIService:
         """
         categorization_prompt = f"""
         Categorize this expense for SARS tax purposes and return ONLY JSON:
-        
         Expense Description: {description}
         Amount: R{amount}
         Context: {context or 'General business expense'}
+
         
+
         Required JSON format:
         {{
             "category": "travel/equipment/supplies/communication/home_office/etc",
@@ -99,7 +161,6 @@ class GigWorkerAIService:
             "notes": "brief explanation"
         }}
         """
-        
         response = self.client.chat.completions.create(
             model=self.config.CHAT_MODEL,
             messages=[
@@ -110,7 +171,6 @@ class GigWorkerAIService:
             temperature=0.1,
             max_tokens=500
         )
-        
         try:
             return json.loads(response.choices[0].message.content)
         except json.JSONDecodeError:
@@ -125,7 +185,9 @@ class GigWorkerAIService:
         Monthly Income: R{monthly_income}
         Monthly Expenses: R{expenses}
         Gig Type: {gig_type}
+
         
+
         Return JSON format:
         {{
             "taxable_income": "annual amount",
@@ -136,7 +198,9 @@ class GigWorkerAIService:
             "notes": "calculation explanation"
         }}
         """
+
         
+
         response = self.client.chat.completions.create(
             model=self.config.CHAT_MODEL,
             messages=[
@@ -146,7 +210,6 @@ class GigWorkerAIService:
             response_format={"type": "json_object"},
             temperature=0.1,
         )
-        
         try:
             return json.loads(response.choices[0].message.content)
         except json.JSONDecodeError:
