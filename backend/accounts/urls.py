@@ -1,6 +1,7 @@
 from django.urls import path
-from .views import RegisterView   # make sure RegisterView exists in accounts/views.py
+from .views import RegisterView, LoginView
 
 urlpatterns = [
-    path("register/", RegisterView.as_view(), name="register"),
+    path("register/", RegisterView.as_view(), name="register_api"),
+    path("login/", LoginView.as_view(), name="login_api"),
 ]
