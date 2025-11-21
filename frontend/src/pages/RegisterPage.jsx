@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { apiRegister } from "../services/api"; 
 
 export default function RegisterPage() {
   const navigate = useNavigate()
@@ -56,36 +57,54 @@ export default function RegisterPage() {
   }
 
   async function handleSubmit(e) {
-    e.preventDefault()
-    const validationErrors = validate()
+    e.preventDefault();
+
+    // Frontend validation first
+    const validationErrors = validate();
     if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
-      return
+      setErrors(validationErrors);
+      return;
     }
-    setErrors({})
-    setIsSubmitting(true)
 
-    try {
-      // TODO: replace with your Django endpoint
-      // const res = await fetch('/api/auth/register/', { ... })
-      console.log('Register data:', formData)
+    setErrors({});
+    setIsSubmitting(true);
 
-      if (formData.profileType === 'artist') {
-        navigate('/dashboard/artist')
-      } else if (formData.profileType === 'creator') {
-        navigate('/dashboard/creator')
-      } else if (formData.profileType === 'business') {
-        navigate('/dashboard/business')
-      } else {
-        alert('Registered successfully (check console). Implement routing per role.')
-        navigate('/login')
-      }
-    } catch (err) {
-      setErrors({ global: 'Registration failed. Please try again.' })
-    } finally {
-      setIsSubmitting(false)
-    }
+    // Map profileType -> backend role field
+    const roleMap = {
+      artist: "artist",
+      creator: "content_creator",
+      business: "small_business",
+    };
+
+  const payload = {
+    first_name: formData.name.trim(),
+    last_name: formData.surname.trim(),
+    role: roleMap[formData.profileType],          // important
+    occupation: formData.occupation.trim(),
+    age: Number(formData.age),
+    email: formData.email.trim(),
+    password: formData.password,
+    confirm_password: formData.passwordConfirm,
+  };
+
+  try {
+    // CALL DJANGO BACKEND
+    const data = await apiRegister(payload);
+    // data = { message: "Registration successful.", user: {...} }
+
+    // You can show a success message or go straight to login:
+    // alert("Account created successfully!");
+    navigate("/login");
+  } catch (err) {
+    // Show backend/global error at top of form
+    setErrors((prev) => ({
+      ...prev,
+      global: err.message || "Registration failed. Please try again.",
+    }));
+  } finally {
+    setIsSubmitting(false);
   }
+}
 
   return (
     <section className="auth-container">
