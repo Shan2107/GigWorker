@@ -1,30 +1,41 @@
-import os
-import openai
+import re
+
+def extract_pdf_text(file):
+    """
+    TODO: Replace this with PyPDF2, pypdf, pdfplumber, or AI extraction.
+    """
+    return "Extracted text from PDF (mock)"
 
 
-openai.api_key = os.getenv('OPENAI_KEY')
+def analyze_text_with_ai(text):
+    """
+    TODO: Replace this with your LLM or OpenAI API call.
+    """
+    severity = "LOW"
+
+    if "terminate" in text.lower():
+        severity = "HIGH"
+
+    analysis = f"AI analysis of text: {text[:150]}..."
+    return analysis, severity
 
 
-def categorize_text(text: str) -> str:
-    prompt = f"Classify this incident description and return severity: {text}"
-    resp = openai.ChatCompletion.create(
-    model='gpt-4o-mini',
-    messages=[
-        {'role':'system','content':'You are a safety classifier.'},
-        {'role':'user','content':prompt}
-],
-    max_tokens=200
-)
-    return resp.choices[0].message['content']
+def extract_image_text(image):
+    """
+    TODO: Use Tesseract, EasyOCR, or an AI Vision model.
+    """
+    return "Detected text from image (mock)"
 
 
-def chat_with_ai(user_message: str, history: list = None) -> str:
-    messages = [{'role':'system','content':'You are a helpful public-safety assistant.'}]
-    if history:
-        messages.extend(history)
-    messages.append({'role':'user','content':user_message})
-    resp = openai.ChatCompletion.create(
-        model='gpt-4o-mini',
-        messages=messages
-)
-    return resp.choices[0].message['content']
+def analyze_income_or_expense(text):
+    """
+    Extract amount using regex and return simple AI explanation.
+    """
+    amount = None
+    match = re.search(r"(\d+[.,]?\d+)", text)
+    if match:
+        amount_str = match.group(1).replace(",", "")
+        amount = float(amount_str)
+
+    ai_analysis = f"AI analyzed financial record. Amount detected: {amount}"
+    return ai_analysis, amount
