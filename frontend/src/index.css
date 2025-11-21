@@ -699,3 +699,166 @@ input.tool-input:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* -------- Income Tracker -------- */
+
+.income-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.income-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.income-title {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.income-subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: #9ca3af;
+}
+
+.income-add-btn {
+  border-radius: 999px;
+  border: 1px solid #4b5563;
+  background: radial-gradient(circle at 0% 0%, #4f46e5, #020617);
+  color: #f9fafb;
+  font-size: 0.85rem;
+  padding: 0.45rem 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.income-add-btn:hover {
+  border-color: #38bdf8;
+}
+
+/* make metric tiles breathe a bit on this page */
+.income-metric-grid .metric-card {
+  padding: 0.8rem 0.9rem;
+}
+
+/* History card tweaks */
+.income-history {
+  margin-top: 0.25rem;
+}
+
+.income-table-wrapper {
+  margin-top: 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid #111827;
+  overflow: hidden;
+}
+
+.income-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.income-table thead {
+  background: #020617;
+  color: #9ca3af;
+}
+
+.income-table th,
+.income-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #111827;
+}
+
+.income-table tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.income-amount-col {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.income-empty {
+  padding: 2rem 0;
+  text-align: center;
+  color: #9ca3af;
+}
+.income-empty-icon {
+  font-size: 2rem;
+  margin-bottom: 0.35rem;
+}
+.income-empty-title {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+.income-empty-text {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+/* Modal overlay + card – reuse auth styles for consistency */
+
+.income-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.income-modal {
+  max-width: 460px;
+  width: 100%;
+  position: relative;
+}
+
+.income-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.income-modal-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.income-modal-close {
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.income-form {
+  margin-top: 0.75rem;
+}
+
+/* select styled like inputs */
+.income-select {
+  border-radius: 0.5rem;
+  border: 1px solid #374151;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+  background: #020617;
+  color: #e5e7eb;
+}
+.income-select:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px #38bdf8;
+}
+
+.income-submit {
+  margin-top: 0.5rem;
+}

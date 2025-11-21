@@ -167,7 +167,7 @@ function BusinessPlanner() {
         </div>
       </div>
       <p className="tool-card-sub">
-        For the hackathon, this can stay static or pull mock data. Later, connect to Django
+        Later, connect to Django
         for real projections based on your historical income and spend.
       </p>
     </div>

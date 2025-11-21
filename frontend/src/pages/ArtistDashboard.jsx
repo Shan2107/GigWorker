@@ -1,7 +1,73 @@
-import { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import {
+  loadIncomeEntries,
+  saveIncomeEntries,
+  calculateIncomeStats,
+} from '../utils/income'
+
+function getYearToDateTotal(entries) {
+  const now = new Date()
+  const year = now.getFullYear()
+
+  return entries.reduce((sum, entry) => {
+    const d = new Date(entry.date)
+    if (d.getFullYear() === year) {
+      return sum + (Number(entry.amount) || 0)
+    }
+    return sum
+  }, 0)
+}
+
+// SARS progressive tax calculation (before rebates, medical credits, etc.)
+function calculateSarsTax(income) {
+  const taxable = Math.max(0, Number(income) || 0)
+
+  if (taxable <= 237100) {
+    return 0.18 * taxable
+  }
+
+  if (taxable <= 370500) {
+    return 42678 + 0.26 * (taxable - 237100)
+  }
+
+  if (taxable <= 512800) {
+    return 77362 + 0.31 * (taxable - 370500)
+  }
+
+  if (taxable <= 673000) {
+    return 121475 + 0.36 * (taxable - 512800)
+  }
+
+  if (taxable <= 857900) {
+    return 179147 + 0.39 * (taxable - 673000)
+  }
+
+  if (taxable <= 1817000) {
+    return 251258 + 0.41 * (taxable - 857900)
+  }
+
+  // 1 817 001 and above
+  return 644489 + 0.45 * (taxable - 1817000)
+}
 
 export default function ArtistDashboard() {
   const [section, setSection] = useState('overview') // overview | contract | royalty | income | tax | ai
+
+  // Dashboard‑level metrics
+  const [ytdIncome, setYtdIncome] = useState(0)
+  const [estimatedTax, setEstimatedTax] = useState(0)
+
+  useEffect(() => {
+    if (section !== 'overview') return
+
+    const entries = loadIncomeEntries()
+    const ytdTotal = getYearToDateTotal(entries)
+
+    const tax = calculateSarsTax(ytdTotal)
+
+    setYtdIncome(ytdTotal)
+    setEstimatedTax(tax)
+  }, [section])
 
   return (
     <div className="dashboard-root">
@@ -73,7 +139,12 @@ export default function ArtistDashboard() {
         {section === 'tax' && <TaxHeader />}
         {section === 'ai' && <AIHeader />}
 
-        {section === 'overview' && <OverviewSection />}
+        {section === 'overview' && (
+          <OverviewSection
+            ytdIncome={ytdIncome}
+            estimatedTax={estimatedTax}
+          />
+        )}
         {section === 'contract' && <ContractAnalyzerSection />}
         {section === 'royalty' && <RoyaltyCalculatorSection />}
         {section === 'income' && <IncomeTrackerSection />}
@@ -203,13 +274,16 @@ function UserBadge({ label }) {
 
 /* ---------- OVERVIEW SECTION ---------- */
 
-function OverviewSection() {
+function OverviewSection({ ytdIncome, estimatedTax }) {
+  const safeYtd = Number.isFinite(ytdIncome) ? ytdIncome : 0
+  const safeTax = Number.isFinite(estimatedTax) ? estimatedTax : 0
+
   return (
     <>
       <div className="metric-grid">
         <div className="metric-card">
           <p className="metric-label">Total Income (YTD)</p>
-          <p className="metric-value">R 0.00</p>
+          <p className="metric-value">R {safeYtd.toFixed(2)}</p>
           <p className="metric-caption">
             Year to date from streaming, gigs, and royalties
           </p>
@@ -217,8 +291,10 @@ function OverviewSection() {
 
         <div className="metric-card">
           <p className="metric-label">Estimated Tax</p>
-          <p className="metric-value metric-warning">R 0.00</p>
-          <p className="metric-caption">~18% of your declared income</p>
+          <p className="metric-value metric-warning">R {safeTax.toFixed(2)}</p>
+          <p className="metric-caption">
+  Approximate SARS income tax on your YTD income (before rebates).
+</p>
         </div>
 
         <div className="metric-card">
@@ -230,6 +306,7 @@ function OverviewSection() {
 
       <h2 className="section-title">Quick Actions</h2>
       <div className="quick-grid">
+        {/* Quick cards unchanged */}
         <div className="quick-card">
           <div className="quick-icon quick-icon-purple">📄</div>
           <h3 className="quick-title">Analyze Contract</h3>
@@ -673,22 +750,311 @@ function RoyaltyCalculatorSection() {
 /* ---------- PLACEHOLDER SECTIONS (Income / Tax / AI) ---------- */
 
 function IncomeTrackerSection() {
+  const todayISO = new Date().toISOString().slice(0, 10)
+
+  const [entries, setEntries] = useState([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const [form, setForm] = useState({
+    date: todayISO,
+    source: 'Spotify',
+    description: '',
+    amount: '',
+  })
+
+  const [errors, setErrors] = useState({})
+
+  // Load existing entries from localStorage
+  useEffect(() => {
+    const saved = loadIncomeEntries()
+    if (saved.length) {
+      saved.sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      )
+      setEntries(saved)
+    }
+  }, [])
+
+  // Persist entries whenever they change
+  useEffect(() => {
+    saveIncomeEntries(entries)
+  }, [entries])
+
+  const stats = useMemo(
+    () => calculateIncomeStats(entries),
+    [entries]
+  )
+
+  function openModal() {
+    setErrors({})
+    setForm({
+      date: todayISO,
+      source: 'Spotify',
+      description: '',
+      amount: '',
+    })
+    setIsModalOpen(true)
+  }
+
+  function closeModal() {
+    if (isSaving) return
+    setIsModalOpen(false)
+  }
+
+  function handleChange(e) {
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
+  }
+
+  function validateForm() {
+    const newErrors = {}
+
+    if (!form.date) {
+      newErrors.date = 'Date is required.'
+    }
+
+    if (!form.source || !form.source.trim()) {
+      newErrors.source = 'Platform / source is required.'
+    }
+
+    if (!form.amount) {
+      newErrors.amount = 'Amount is required.'
+    } else {
+      const value = Number(form.amount)
+      if (Number.isNaN(value) || value <= 0) {
+        newErrors.amount = 'Enter a positive amount.'
+      }
+    }
+
+    return newErrors
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault()
+    const validation = validateForm()
+    if (Object.keys(validation).length > 0) {
+      setErrors(validation)
+      return
+    }
+
+    setErrors({})
+    setIsSaving(true)
+
+    try {
+      const amountNumber = Number(form.amount)
+
+      const newEntry = {
+        id: Date.now().toString(),
+        date: form.date,
+        source: form.source.trim(),
+        description: form.description.trim(),
+        amount: amountNumber,
+      }
+
+      setEntries(prev =>
+        [...prev, newEntry].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        )
+      )
+
+      setIsModalOpen(false)
+    } catch (err) {
+      setErrors({
+        global: 'Could not save this income entry. Please try again.',
+      })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
-    <div className="tool-card">
-      <div className="tool-card-header">
-        <span>📊</span>
+    <section className="income-section">
+      {/* Header row */}
+      <div className="income-header">
         <div>
-          <div className="tool-card-title">Income Tracker (coming soon)</div>
-          <div className="tool-card-sub">
-            You&apos;ll be able to log gig fees, merch sales, and platform payouts here.
-          </div>
+          <h2 className="income-title">Income Tracker</h2>
+          <p className="income-subtitle">
+            Track income from your gigs, streams, and merch – all in one place.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="income-add-btn"
+          onClick={openModal}
+        >
+          + Add Income
+        </button>
+      </div>
+
+      {/* Summary tiles (front‑end calculations) */}
+      <div className="metric-grid income-metric-grid">
+        <div className="metric-card">
+          <div className="metric-label">Total Income</div>
+          <div className="metric-value">R {stats.total.toFixed(2)}</div>
+          <p className="metric-caption">Across all entries</p>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">This Month</div>
+          <div className="metric-value">R {stats.thisMonthTotal.toFixed(2)}</div>
+          <p className="metric-caption">Current period</p>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Transactions</div>
+          <div className="metric-value">{stats.count}</div>
+          <p className="metric-caption">Total logged</p>
         </div>
       </div>
-      <p style={{ fontSize: '0.85rem', color: '#9ca3af' }}>
-        This section will show charts for income by source (Spotify, Apple Music, gigs,
-        sync, etc.) and help you see which parts of your music career are paying the most.
-      </p>
-    </div>
+
+      {/* History card */}
+      <div className="tool-card income-history">
+        <div className="tool-card-header">
+          <span>📜</span>
+          <div>
+            <div className="tool-card-title">Income History</div>
+            <div className="tool-card-sub">
+              Recent payouts and gig payments you&apos;ve logged.
+            </div>
+          </div>
+        </div>
+
+        {entries.length === 0 ? (
+          <div className="income-empty">
+            <div className="income-empty-icon">$</div>
+            <p className="income-empty-title">No income entries yet</p>
+            <p className="income-empty-text">
+              Click <strong>&quot;Add Income&quot;</strong> to start tracking your earnings.
+            </p>
+          </div>
+        ) : (
+          <div className="income-table-wrapper">
+            <table className="income-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Platform / Source</th>
+                  <th>Description</th>
+                  <th className="income-amount-col">Amount (ZAR)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map(entry => (
+                  <tr key={entry.id}>
+                    <td>{entry.date}</td>
+                    <td>{entry.source}</td>
+                    <td>{entry.description || '—'}</td>
+                    <td className="income-amount-col">
+                      R {entry.amount.toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Add Income modal */}
+      {isModalOpen && (
+        <div className="income-modal-overlay" onClick={closeModal}>
+          <div
+            className="income-modal auth-card"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="income-modal-header">
+              <h3 className="income-modal-title">Add New Income</h3>
+              <button
+                type="button"
+                className="income-modal-close"
+                onClick={closeModal}
+              >
+                ×
+              </button>
+            </div>
+
+            {errors.global && (
+              <div className="auth-error" style={{ marginTop: 0 }}>
+                {errors.global}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="auth-form income-form">
+              <div className="form-group">
+                <label htmlFor="income-date">Date</label>
+                <input
+                  id="income-date"
+                  name="date"
+                  type="date"
+                  value={form.date}
+                  onChange={handleChange}
+                />
+                {errors.date && (
+                  <p className="field-error">{errors.date}</p>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="income-source">Platform / Source</label>
+                <select
+                  id="income-source"
+                  name="source"
+                  value={form.source}
+                  onChange={handleChange}
+                  className="income-select"
+                >
+                  <option value="Spotify">Spotify</option>
+                  <option value="Apple Music">Apple Music</option>
+                  <option value="YouTube">YouTube</option>
+                  <option value="Live Gig">Live Gig</option>
+                  <option value="Merch">Merch</option>
+                  <option value="Sync / Licensing">Sync / Licensing</option>
+                  <option value="Other">Other</option>
+                </select>
+                {errors.source && (
+                  <p className="field-error">{errors.source}</p>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="income-description">Description</label>
+                <input
+                  id="income-description"
+                  name="description"
+                  placeholder="Brief description (optional)"
+                  value={form.description}
+                  onChange={handleChange}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="income-amount">Amount (ZAR)</label>
+                <input
+                  id="income-amount"
+                  name="amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.amount}
+                  onChange={handleChange}
+                />
+                {errors.amount && (
+                  <p className="field-error">{errors.amount}</p>
+                )}
+              </div>
+
+              <button
+                type="submit"
+                className="auth-button income-submit"
+                disabled={isSaving}
+              >
+                {isSaving ? 'Adding income…' : 'Add Income'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 
