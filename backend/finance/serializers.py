@@ -1,3 +1,6 @@
+from rest_framework import serializers
+from .models import Account, Transaction, TaxReport
+
 class AccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = Account
@@ -5,9 +8,9 @@ class AccountSerializer(serializers.ModelSerializer):
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-        class Meta:
-            model = Transaction
-            fields = '__all__'
+    class Meta:
+        model = Transaction
+        fields = '__all__'
 
 
 class TaxReportSerializer(serializers.ModelSerializer):
