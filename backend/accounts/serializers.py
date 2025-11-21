@@ -1,3 +1,4 @@
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from rest_framework import serializers
 from .models import Profile
@@ -53,3 +54,22 @@ class RegisterSerializer(serializers.Serializer):
         )
 
         return user
+    
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        password = attrs.get("password")
+
+        # We created users with username=email, so we authenticate that way
+        user = authenticate(username=email, password=password)
+        if not user:
+            # One generic error message for either wrong email or wrong password
+            raise serializers.ValidationError(
+                "Invalid email or password. Please try again."
+            )
+
+        attrs["user"] = user
+        return attrs    
